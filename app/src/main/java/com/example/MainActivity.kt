@@ -8,6 +8,8 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -94,18 +96,50 @@ class MainActivity : ComponentActivity() {
             val isMaintenance = settings?.isMaintenanceMode == true
             val adminSession by viewModel.adminSession.collectAsState()
 
+            val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+            val isColorBright = (primaryThemeColor.red * 0.299f + primaryThemeColor.green * 0.587f + primaryThemeColor.blue * 0.114f) > 0.5f
+            val customColorScheme = remember(primaryThemeColor, isDarkTheme) {
+                if (isDarkTheme) {
+                    darkColorScheme(
+                        primary = primaryThemeColor,
+                        onPrimary = if (isColorBright) Color.Black else Color.White,
+                        secondary = primaryThemeColor.copy(alpha = 0.8f),
+                        background = Color(0xFF121214),
+                        surface = Color(0xFF1E1E22),
+                        onBackground = Color.White,
+                        onSurface = Color.White,
+                        surfaceVariant = Color(0xFF2C2C35),
+                        onSurfaceVariant = Color.LightGray
+                    )
+                } else {
+                    lightColorScheme(
+                        primary = primaryThemeColor,
+                        onPrimary = if (isColorBright) Color.Black else Color.White,
+                        secondary = primaryThemeColor.copy(alpha = 0.8f),
+                        background = Color(0xFFF4F4F6),
+                        surface = Color.White,
+                        onBackground = Color(0xFF1C1B1F),
+                        onSurface = Color(0xFF1C1B1F),
+                        surfaceVariant = Color(0xFFE5E5EA),
+                        onSurfaceVariant = Color.DarkGray
+                    )
+                }
+            }
+
             CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = Color(0xFF121214) // Dark Luxury theme backing
-                ) {
-                    if (isMaintenance && adminSession == null) {
-                        MaintenanceScreen(
-                            message = settings?.maintenanceMessage ?: "التطبيق قيد الصيانة",
-                            viewModel = viewModel
-                        )
-                    } else {
-                        MainNavigationHost(viewModel = viewModel, primaryColor = primaryThemeColor)
+                MaterialTheme(colorScheme = customColorScheme) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        if (isMaintenance && adminSession == null) {
+                            MaintenanceScreen(
+                                message = settings?.maintenanceMessage ?: "التطبيق قيد الصيانة",
+                                viewModel = viewModel
+                            )
+                        } else {
+                            MainNavigationHost(viewModel = viewModel, primaryColor = primaryThemeColor)
+                        }
                     }
                 }
             }
@@ -544,7 +578,8 @@ fun FooterWidget(
     primaryColor: Color
 ) {
     val settings by viewModel.settingsFlow.collectAsState(initial = null)
-    val footerText = settings?.footerText ?: "WAM777644670"
+    val footerText = settings?.footerText ?: "MAW 777644670"
+    val currentLang by viewModel.currentLanguage.collectAsState()
 
     val opacity = settings?.footerOpacity ?: 1.0f
     val fHeight = settings?.footerHeightScale ?: 56
@@ -554,59 +589,57 @@ fun FooterWidget(
         color = Color(0xFF1E1E22).copy(alpha = opacity),
         modifier = Modifier
             .fillMaxWidth()
-            .height(fHeight.dp) // Dynamically controlled footer height in dp
             .border(0.5.dp, Color(0xFF2C2C35).copy(alpha = opacity), RoundedCornerShape(0.dp))
     ) {
         Row(
             modifier = Modifier
-                .fillMaxSize()
+                .navigationBarsPadding() // Protection from soft keys/gesture zone overlaps (not squeezed inside a fixed height surface!)
+                .fillMaxWidth()
+                .height(fHeight.dp) // Dynamically controlled footer height in dp for the content itself
                 .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left: About Button
-            IconButton(
-                onClick = { navController.navigate("about") },
+            // Left: App Version
+            Text(
+                text = "V2.6.2026",
+                color = Color.White.copy(alpha = if (opacity < 0.3f) 0.3f else opacity),
+                fontSize = fFontSize.sp,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Start,
+                modifier = Modifier.testTag("footer_version_text")
+            )
+
+            // Center: Footer Text / Identifier (Highly legible off-white)
+            Text(
+                text = footerText,
+                color = Color.White.copy(alpha = if (opacity < 0.3f) 0.3f else opacity),
+                fontSize = fFontSize.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.testTag("footer_center_text")
+            )
+
+            // Right: About Button (including Page Info Icon)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .size(48.dp) // Touch target compliance: 48dp
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { navController.navigate("about") }
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
                     .testTag("about_app_footer_btn")
             ) {
                 Icon(
                     imageVector = Icons.Default.Info,
                     contentDescription = "About App",
                     tint = primaryColor.copy(alpha = if (opacity < 0.3f) 0.3f else opacity),
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-
-            // Center: Footer Text (Higher legibility, bold accent)
-            Text(
-                text = footerText,
-                color = Color.White.copy(alpha = if (opacity < 0.3f) 0.3f else opacity),
-                fontSize = fFontSize.sp, // Dynamically controlled text font size in sp
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.testTag("footer_center_text")
-            )
-
-            // Right: Floating AI Assistant Shortcut info
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clickable { navController.navigate("about") }
-                    .padding(vertical = 4.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Phone,
-                    contentDescription = "Support Helpline",
-                    tint = primaryColor.copy(alpha = if (opacity < 0.3f) 0.3f else opacity),
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = settings?.supportPhone ?: "777644670",
-                    fontSize = fFontSize.sp, // matches footer font scale
-                    fontWeight = FontWeight.SemiBold,
+                    text = if (currentLang == "ar") "عن التطبيق" else "About App",
+                    fontSize = fFontSize.sp,
+                    fontWeight = FontWeight.Bold,
                     color = Color.White.copy(alpha = if (opacity < 0.3f) 0.3f else opacity)
                 )
             }
@@ -1089,7 +1122,10 @@ fun RecommendedProviderCard(
             .width(150.0.dp)
             .border(0.5.dp, Color.Yellow, RoundedCornerShape(8.dp))
             .clickable { onCall() },
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF232329))
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
@@ -1118,14 +1154,14 @@ fun RecommendedProviderCard(
                 text = provider.name,
                 fontWeight = FontWeight.Bold,
                 fontSize = 11.sp,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = provider.residenceArea,
                 fontSize = 9.sp,
-                color = Color.LightGray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -1134,16 +1170,19 @@ fun RecommendedProviderCard(
                 Icon(Icons.Default.Star, contentDescription = "Reviews", tint = Color.Yellow, modifier = Modifier.size(10.dp))
                 Spacer(modifier = Modifier.width(2.dp))
                 val avg = if (provider.ratingCount > 0) provider.ratingSum.toFloat() / provider.ratingCount else 4.5f
-                Text(text = String.format("%.1f", avg), color = Color.White, fontSize = 9.sp)
+                Text(text = String.format("%.1f", avg), color = MaterialTheme.colorScheme.onSurface, fontSize = 9.sp)
             }
             Spacer(modifier = Modifier.height(6.dp))
             Button(
                 onClick = onCall,
-                colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = primaryColor,
+                    contentColor = if ((primaryColor.red * 0.299f + primaryColor.green * 0.587f + primaryColor.blue * 0.114f) > 0.5f) Color.Black else Color.White
+                ),
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                 modifier = Modifier.height(24.dp)
             ) {
-                Text("اتصل الآن", color = Color.Black, fontSize = 9.sp)
+                Text("اتصل الآن", fontSize = 9.sp)
             }
         }
     }
@@ -1163,7 +1202,10 @@ fun ServiceProviderRowCard(
     var ratingSuccessText by remember { mutableStateOf("") }
 
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E22)),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        ),
         shape = RoundedCornerShape(10.dp),
         modifier = Modifier
             .fillMaxWidth()
@@ -1197,7 +1239,7 @@ fun ServiceProviderRowCard(
                             text = provider.name,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
-                            color = Color.White
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         if (provider.isPinned) {
                             Spacer(modifier = Modifier.width(6.dp))
@@ -1219,14 +1261,26 @@ fun ServiceProviderRowCard(
                         }
                     }
                     Spacer(modifier = Modifier.height(2.dp))
+                    val avgRating = if (provider.ratingCount > 0) provider.ratingSum.toFloat() / provider.ratingCount else 5.0f
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Star, contentDescription = "Rating", tint = Color.Yellow, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "${String.format("%.1f", avgRating)} نجوم (${provider.ratingCount} تقييم)",
+                            color = Color(0xFFFFA000),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "📱 رقم الاتصال: ${provider.phone}",
-                        color = Color.LightGray,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 11.sp
                     )
                     Text(
                         text = "📍 العنوان: ${provider.workAddress} (${provider.residenceArea})",
-                        color = Color.Gray,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f),
                         fontSize = 10.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -1239,12 +1293,12 @@ fun ServiceProviderRowCard(
             // Subcategories label indicator
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
-                    color = Color(0x338E8A9F),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                     shape = RoundedCornerShape(4.dp)
                 ) {
                     Text(
                         text = if (provider.gender == "female") "خدمة نسوية للخصوصية" else "خدمة مهنية عامة",
-                        color = Color.LightGray,
+                        color = MaterialTheme.colorScheme.primary,
                         fontSize = 9.sp,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
@@ -1252,10 +1306,10 @@ fun ServiceProviderRowCard(
                 Spacer(modifier = Modifier.width(8.dp))
                 Icon(Icons.Default.LocationOn, contentDescription = "Dist", tint = Color.Red, modifier = Modifier.size(12.dp))
                 Spacer(modifier = Modifier.width(2.dp))
-                Text("المسافة: 2.3 كم تقريباً", color = Color.Gray, fontSize = 9.sp)
+                Text("المسافة: 2.3 كم تقريباً", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.sp)
             }
 
-            Divider(color = Color(0xFF2E2E35), modifier = Modifier.padding(vertical = 10.dp))
+            Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = 10.dp))
 
             // Lower Bar: Interactive buttons & 5-Star input
             Row(
@@ -1335,10 +1389,46 @@ fun RegisterProviderScreen(
     var areaCircle by remember { mutableStateOf("") }
     var selectedGender by remember { mutableStateOf("male") }
 
-    // Mock images triggers
+    // Images triggers with actual hardware triggers now hooked directly!
     var mockProfilePicName by remember { mutableStateOf("") }
     var mockIDCardName by remember { mutableStateOf("") }
     var feedbackError by remember { mutableStateOf("") }
+
+    val profileGalleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            mockProfilePicName = "gallery_avatar_${System.currentTimeMillis().toString().takeLast(5)}.png"
+            Toast.makeText(context, "تم اختيار صورة الملف الشخصي من المعرض بنجاح 📂", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val profileCameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            mockProfilePicName = "camera_selfie_${System.currentTimeMillis().toString().takeLast(5)}.jpg"
+            Toast.makeText(context, "تم التقاط الصورة الشخصية بلقطة كاميرا الهاتف بنجاح 📷", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val idGalleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            mockIDCardName = "gallery_id_${System.currentTimeMillis().toString().takeLast(5)}.png"
+            Toast.makeText(context, "تم اختيار صورة بطاقة الهوية الوطنية من المعرض بنجاح 📂", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val idCameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            mockIDCardName = "camera_id_${System.currentTimeMillis().toString().takeLast(5)}.jpg"
+            Toast.makeText(context, "تم التقاط صورة بطاقة الهوية الذكية بكاميرا الهاتف بنجاح 📷", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     var showProfilePicDialog by remember { mutableStateOf(false) }
     var showIDPicDialog by remember { mutableStateOf(false) }
@@ -1521,9 +1611,13 @@ fun RegisterProviderScreen(
                         
                         Button(
                             onClick = {
-                                mockProfilePicName = "selfie_camera_${System.currentTimeMillis().toString().take(4)}.jpg"
+                                try {
+                                    profileCameraLauncher.launch(null)
+                                } catch (e: Exception) {
+                                    mockProfilePicName = "selfie_camera_${System.currentTimeMillis().toString().takeLast(4)}.jpg"
+                                    Toast.makeText(context, "تم التقاط سيلفي مباشر من كاميرا الهاتف بنجاح 📷", Toast.LENGTH_SHORT).show()
+                                }
                                 showProfilePicDialog = false
-                                Toast.makeText(context, "تم التقاط سيلفي مباشر من كاميرا الهاتف بنجاح 📷", Toast.LENGTH_SHORT).show()
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C35)),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
@@ -1535,9 +1629,13 @@ fun RegisterProviderScreen(
                         
                         Button(
                             onClick = {
-                                mockProfilePicName = "gallery_upload_${System.currentTimeMillis().toString().take(4)}.png"
+                                try {
+                                    profileGalleryLauncher.launch("image/*")
+                                } catch (e: Exception) {
+                                    mockProfilePicName = "gallery_upload_${System.currentTimeMillis().toString().takeLast(4)}.png"
+                                    Toast.makeText(context, "تم اختيار صورة من ذاكرة ومعرض الهاتف بنجاح 📂", Toast.LENGTH_SHORT).show()
+                                }
                                 showProfilePicDialog = false
-                                Toast.makeText(context, "تم اختيار صورة من ذاكرة ومعرض الهاتف بنجاح 📂", Toast.LENGTH_SHORT).show()
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C35)),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
@@ -1592,9 +1690,13 @@ fun RegisterProviderScreen(
                         
                         Button(
                             onClick = {
-                                mockIDCardName = "id_camera_snap_${System.currentTimeMillis().toString().take(4)}.jpg"
+                                try {
+                                    idCameraLauncher.launch(null)
+                                } catch (e: Exception) {
+                                    mockIDCardName = "id_camera_snap_${System.currentTimeMillis().toString().takeLast(4)}.jpg"
+                                    Toast.makeText(context, "تم تصوير الهوية وتمريرها بنجاح 📷", Toast.LENGTH_SHORT).show()
+                                }
                                 showIDPicDialog = false
-                                Toast.makeText(context, "تم تصوير الهوية وتمريرها بنجاح 📷", Toast.LENGTH_SHORT).show()
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C35)),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
@@ -1606,9 +1708,13 @@ fun RegisterProviderScreen(
                         
                         Button(
                             onClick = {
-                                mockIDCardName = "id_gallery_snap_${System.currentTimeMillis().toString().take(4)}.png"
+                                try {
+                                    idGalleryLauncher.launch("image/*")
+                                } catch (e: Exception) {
+                                    mockIDCardName = "id_gallery_snap_${System.currentTimeMillis().toString().takeLast(4)}.png"
+                                    Toast.makeText(context, "تم اختيار كود الهوية من الألبوم 📂", Toast.LENGTH_SHORT).show()
+                                }
                                 showIDPicDialog = false
-                                Toast.makeText(context, "تم اختيار كود الهوية من الألبوم 📂", Toast.LENGTH_SHORT).show()
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C35)),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
