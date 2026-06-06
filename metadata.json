@@ -1,0 +1,6 @@
+{
+  "name": "Yemen Services",
+  "description": "Comprehensive, Arabic-first Yemen-based service provider app with custom backdoor configurations, offline FAQ, real-time sync, and Gemini-powered smart AI assistant.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
