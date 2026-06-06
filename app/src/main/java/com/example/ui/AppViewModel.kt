@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.util.UUID
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -25,6 +26,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val activityLogs = repository.activityLogs
     val faqs = repository.faqs
     val settingsFlow = repository.settingsFlow
+    
+    // NEW REALTIME STATE STREAMS
+    val moderators = repository.allModerators
+    val allChatMessagesFlow = repository.allChatMessages
 
     // --- Authentication & Backdoor Sessions ---
     private val _adminSession = MutableStateFlow<String?>(null)
@@ -265,6 +270,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- Admin Authentication Core ---
     fun attemptLogin(username: String, password: String, rememberMe: Boolean): Boolean {
+        // 1. Check Master Main Admin
         if (username == "WAM2026" && password == "maher736462") {
             _adminSession.value = "WAM2026"
             if (rememberMe) {
@@ -276,7 +282,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
             return true
         }
-        return false
+
+        // 2. Check Database-Stored Moderators
+        var success = false
+        runBlocking {
+            val mod = repository.getModeratorByUsername(username)
+            if (mod != null && mod.password == password && mod.isActive) {
+                _adminSession.value = username
+                if (rememberMe) {
+                    prefs.edit().putString("LOGGED_ADMIN", username).apply()
+                }
+                _isBackdoorActive.value = false
+                insertActivityLog(username, "Moderator Sign In", "Moderator $username successfully logged into dashboard")
+                success = true
+            }
+        }
+        return success
     }
 
     fun attemptBackdoorLogin(password: String, persist: Boolean): Boolean {
@@ -319,10 +340,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 faq.questionEn.contains(question, ignoreCase = true) || question.contains(faq.questionEn, ignoreCase = true)
             }
 
-            val offlineAnswer = when {
+            var offlineAnswer: String? = when {
                 matchesAr != null -> if (_currentLanguage.value == "ar") matchesAr.answerAr else matchesAr.answerEn
                 matchesEn != null -> if (_currentLanguage.value == "ar") matchesEn.answerAr else matchesEn.answerEn
                 else -> null
+            }
+
+            // Perform dynamic FAQ routing for Categories listing
+            if (offlineAnswer == null && (question.contains("الأقسام", ignoreCase = true) || question.contains("اقسام", ignoreCase = true))) {
+                val cats = repository.categories.firstOrNull() ?: emptyList()
+                val catNames = cats.filter { it.parentCategoryId == null }.joinToString("، ") { it.nameAr }
+                offlineAnswer = "الأقسام الأساسية المتوفرة في دليل خدمات اليمن هي:\n\n✨ $catNames \n\nيمكنك استكشافها والبحث عن مقدمي الخدمات بكل قسم مباشرة من القائمة الرئيسية."
+            }
+            if (offlineAnswer == null && (question.contains("رقم الدعم", ignoreCase = true) || question.contains("الدعم الفني", ignoreCase = true))) {
+                offlineAnswer = "رقم الدعم الفني لعملاء ومزودي الخدمة في اليمن هو: 777644670 متاح على مدار الساعة."
+            }
+            if (offlineAnswer == null && (question.contains("كيف أتصل بمقدم", ignoreCase = true) || question.contains("كيف اتصل بمقدم", ignoreCase = true) || question.contains("طريقة الاتصال", ignoreCase = true))) {
+                offlineAnswer = "يمكنك الاتصال بمقدم الخدمة عن طريق الضغط على زر الكرت الخاص به في الشاشة الرئيسية والاتصال به هاتفياً أو عبر مراسلته عبر تطبيق واتساب المدمج."
             }
 
             if (offlineAnswer != null) {
@@ -332,7 +366,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 _isAILoading.value = false
             } else {
                 // 2. Call dynamic Gemini Client online
-                val result = GeminiClient.generateResponse(question)
+                val result = try {
+                    GeminiClient.generateResponse(question)
+                } catch (e: Exception) {
+                    "عذراً، لم أتمكن من الاتصال بالخادم الذكي (أنت تعمل حالياً بالوضع غير المتصل بالإنترنت 🚫). \n\n💡 أسئلة يمكنك طرحها محلياً:\n• \"ماهي الأقسام\"\n• \"كيف أتصل بمقدم خدمة\"\n• \"ما هو رقم الدعم\""
+                }
                 val aiResponse = AIChatMessage(UUID.randomUUID().toString(), result, false)
                 _aiChatMessages.value = _aiChatMessages.value + aiResponse
                 _isAILoading.value = false
@@ -597,9 +635,109 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun incrementCallCount() {
+        viewModelScope.launch {
+            val settings = repository.getSettingsDirect()
+            repository.insertSettings(settings.copy(cumulativeCallsCount = settings.cumulativeCallsCount + 1))
+        }
+    }
+
     // Activity Log super admin accessor helper
     suspend fun insertActivityLog(user: String, action: String, details: String) {
         repository.insertActivityLog(user, action, details)
+    }
+
+    // --- Dynamic Session Permissions ---
+    fun getSessionPermissions(): Moderator {
+        val current = _adminSession.value
+        if (current == null) {
+            return Moderator("", "", "none", canEditCategories = false, canDeleteProviders = false, canManageSettings = false, isActive = false)
+        }
+        if (current == "Owner" || current == "WAM2026") {
+            return Moderator(current, "", "owner", canEditCategories = true, canDeleteProviders = true, canManageSettings = true, isActive = true)
+        }
+        return runBlocking {
+            repository.getModeratorByUsername(current) ?: Moderator(current, "", "moderator", canEditCategories = false, canDeleteProviders = false, canManageSettings = false, isActive = false)
+        }
+    }
+
+    // --- Moderator Mutations ---
+    fun addOrUpdateModerator(moderator: Moderator) {
+        viewModelScope.launch {
+            repository.insertModerator(moderator)
+            insertActivityLog(_adminSession.value ?: "Owner", "Save Moderator", "Added/Modified moderator: ${moderator.username}")
+        }
+    }
+
+    fun deleteModerator(username: String) {
+        viewModelScope.launch {
+            repository.deleteModeratorByUsername(username)
+            insertActivityLog(_adminSession.value ?: "Owner", "Delete Moderator", "Deleted moderator account: $username")
+        }
+    }
+
+    // --- Provider Chat Suspension ---
+    fun setProviderChatSuspended(providerId: String, isSuspended: Boolean) {
+        viewModelScope.launch {
+            repository.updateProviderChatSuspended(providerId, isSuspended)
+            insertActivityLog(_adminSession.value ?: "Admin", "Provider Chat Action", "Set provider ID: $providerId chat suspended to: $isSuspended")
+        }
+    }
+
+    // --- Global Chat Audits & Clear Logs ---
+    fun wipeAllChatsPermanently() {
+        viewModelScope.launch {
+            repository.deleteAllChatMessages()
+            insertActivityLog(_adminSession.value ?: "Admin", "Clear Logs", "Wiped all chat message records instantly for user privacy")
+        }
+    }
+
+    // --- Real-time User/Provider Chat message injection ---
+    fun getChatMessagesFlow(chatId: String): Flow<List<ChatMessage>> {
+        return repository.getChatMessages(chatId)
+    }
+
+    fun sendLiveMessage(chatId: String, senderId: String, receiverId: String, messageText: String) {
+        if (messageText.isBlank()) return
+        val msg = ChatMessage(
+            id = UUID.randomUUID().toString(),
+            chatId = chatId,
+            senderId = senderId,
+            receiverId = receiverId,
+            message = messageText,
+            timestamp = System.currentTimeMillis()
+        )
+        viewModelScope.launch {
+            repository.insertChatMessage(msg)
+            
+            // Simulating real-time auto replies from providers or administrator to make the chat feel alive!
+            if (senderId == "user" && receiverId != "admin") {
+                kotlinx.coroutines.delay(1200)
+                // Generate a friendly professional mock reply in Yemeni Arabic dialect based on the provider
+                val providerName = repository.getServiceProviderById(receiverId)?.name ?: "مقدم الخدمة"
+                val reply = ChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    chatId = chatId,
+                    senderId = receiverId,
+                    receiverId = "user",
+                    message = "حياك الله يا غالي، أنا ${providerName}. قرأت رسالتك: \"${messageText}\". تواصل معي الآن وسأقوم بخدمتك في أقصر وقت ممكن إن شاء الله!",
+                    timestamp = System.currentTimeMillis()
+                )
+                repository.insertChatMessage(reply)
+            } else if (senderId == "user" && receiverId == "admin") {
+                kotlinx.coroutines.delay(1200)
+                // Friendly Yemeni admin support message
+                val adminReply = ChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    chatId = chatId,
+                    senderId = "admin",
+                    receiverId = "user",
+                    message = "مرحباً بك في دعم WAM للخدمات العامة اليمني. بخصوص استفسارك، نحن هنا للمتابعة ومساعدتك فوراً. تفضل بطرح تفاصيل طلبك.",
+                    timestamp = System.currentTimeMillis()
+                )
+                repository.insertChatMessage(adminReply)
+            }
+        }
     }
 }
 

@@ -37,7 +37,8 @@ data class ServiceProvider(
     val ratingSum: Int = 0,
     val ratingCount: Int = 0,
     val isBanned: Boolean = false,
-    val gender: String = "male" // male or female
+    val gender: String = "male", // male or female
+    val chatSuspended: Boolean = false // If moderator/admin suspends direct messaging
 ) : Serializable
 
 @Entity(tableName = "banners")
@@ -123,5 +124,29 @@ data class AppSettings(
     val supportIconVisible: Boolean = true,
     val fontColor: String = "#FFFFFF",
     val fontType: String = "Bold",
-    val fontSize: Int = 14
+    val fontSize: Int = 14,
+    val footerOpacity: Float = 1.0f,
+    val footerHeightScale: Int = 56,
+    val footerFontSize: Int = 12,
+    val cumulativeCallsCount: Int = 0,
+    
+    // NEW REAL-TIME CHAT & DYNAMIC OVERLAYS CONFIGS
+    val isChatServiceDisabled: Boolean = false,
+    val chatServiceDisabledReason: String = "تم إيقاف خدمة المحادثات الفورية مؤقتاً لتحديث النظام بقرار من الإدارة.",
+    val assistantIconSymbol: String = "Face", // Face, Star, Build, Info, Lock
+    val assistantIconGlow: Boolean = false,
+    val liveChatIconSymbol: String = "Mail", // Mail, Chat, Build, Lock, Menu
+    val liveChatIconGlow: Boolean = false,
+    val iconVisualEffectType: String = "Pulse" // Pulse, Rotate, Shake, None
+) : Serializable
+
+@Entity(tableName = "moderators")
+data class Moderator(
+    @PrimaryKey val username: String,
+    val password: String,
+    val role: String = "moderator", // owner, admin, moderator
+    val canEditCategories: Boolean = true,
+    val canDeleteProviders: Boolean = true,
+    val canManageSettings: Boolean = true,
+    val isActive: Boolean = true
 ) : Serializable

@@ -125,12 +125,49 @@ class AppRepository(private val appDao: AppDao) {
         appDao.deleteFAQById(id)
     }
 
+    suspend fun updateProviderChatSuspended(id: String, chatSuspended: Boolean) {
+        appDao.updateProviderChatSuspended(id, chatSuspended)
+    }
+
+    // --- Moderator Account Facades ---
+    val allModerators: Flow<List<Moderator>> = appDao.getAllModeratorsFlow()
+
+    suspend fun getModeratorsDirectList(): List<Moderator> {
+        return appDao.getAllModerators()
+    }
+
+    suspend fun getModeratorByUsername(username: String): Moderator? {
+        return appDao.getModeratorByUsername(username)
+    }
+
+    suspend fun insertModerator(moderator: Moderator) {
+        appDao.insertModerator(moderator)
+    }
+
+    suspend fun deleteModeratorByUsername(username: String) {
+        appDao.deleteModeratorByUsername(username)
+    }
+
+    // --- Global Chat Audits ---
+    val allChatMessages: Flow<List<ChatMessage>> = appDao.getAllChatMessagesFlow()
+
+    suspend fun deleteAllChatMessages() {
+        appDao.deleteAllChatMessages()
+    }
+
     // --- DB Seeding ---
     suspend fun seedInitialDataIfEmpty() {
         val existingSettings = appDao.getSettingsDirect()
         if (existingSettings == null) {
             // Seed settings
             appDao.insertSettings(AppSettings())
+        }
+
+        // Seed some initial moderators if empty
+        val existingMods = appDao.getAllModerators()
+        if (existingMods.isEmpty()) {
+            appDao.insertModerator(Moderator("admin1", "pass123", "moderator", true, true, true, isActive = true))
+            appDao.insertModerator(Moderator("yemen_mod", "123456", "moderator", true, false, false, isActive = true))
         }
 
         val categoriesCount = appDao.getAllCategories().firstOrNull() ?: emptyList()

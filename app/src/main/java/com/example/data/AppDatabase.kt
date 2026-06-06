@@ -14,7 +14,8 @@ import androidx.room.RoomDatabase
         ChatMessage::class,
         ActivityLog::class,
         FAQItem::class,
-        AppSettings::class
+        AppSettings::class,
+        Moderator::class
     ],
     version = 1,
     exportSchema = false

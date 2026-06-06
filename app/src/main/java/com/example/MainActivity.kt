@@ -10,6 +10,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -120,8 +122,9 @@ fun MainNavigationHost(viewModel: AppViewModel, primaryColor: Color) {
     val currentLang by viewModel.currentLanguage.collectAsState()
     val adminSession by viewModel.adminSession.collectAsState()
 
-    // Floating chat state
+    // Floating chat states
     var showChatDialog by remember { mutableStateOf(false) }
+    var showLiveConversationsDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -144,19 +147,99 @@ fun MainNavigationHost(viewModel: AppViewModel, primaryColor: Color) {
             val isHidden = settings?.chatButtonHidden == true
             val size = settings?.chatButtonSize ?: 50
             if (!isHidden) {
-                FloatingActionButton(
-                    onClick = { showChatDialog = true },
-                    containerColor = primaryColor,
-                    contentColor = Color.White,
-                    modifier = Modifier
-                        .size(size.dp)
-                        .testTag("floating_chat_button")
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Mail,
-                        contentDescription = "Chat Support",
-                        modifier = Modifier.size((size * 0.5f).dp)
-                    )
+                    val pulseTransition = rememberInfiniteTransition(label = "pulse")
+                    
+                    // --- Button 1: AI Assistant (Pulsing Glow / Custom Icons) ---
+                    val aiGlow = settings?.assistantIconGlow == true
+                    val aiScale by if (aiGlow) {
+                        pulseTransition.animateFloat(
+                            initialValue = 1.0f,
+                            targetValue = 1.15f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(900, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                                repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+                            ),
+                            label = "aiScale"
+                        )
+                    } else {
+                        remember { mutableStateOf(1.0f) }
+                    }
+                    
+                    val aiRotation by if (settings?.iconVisualEffectType == "Rotate") {
+                        pulseTransition.animateFloat(
+                            initialValue = 0f,
+                            targetValue = 360f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(5000, easing = androidx.compose.animation.core.LinearEasing),
+                                repeatMode = androidx.compose.animation.core.RepeatMode.Restart
+                            ),
+                            label = "aiRot"
+                        )
+                    } else {
+                        remember { mutableStateOf(0f) }
+                    }
+
+                    FloatingActionButton(
+                        onClick = { showChatDialog = true },
+                        containerColor = primaryColor,
+                        contentColor = Color.Black,
+                        modifier = Modifier
+                            .size(size.dp)
+                            .graphicsLayer(
+                                scaleX = aiScale,
+                                scaleY = aiScale,
+                                rotationZ = aiRotation
+                            )
+                            .testTag("floating_ai_assistant_btn")
+                    ) {
+                        Icon(
+                            imageVector = mapSymbolToIcon(settings?.assistantIconSymbol ?: "Face"),
+                            contentDescription = "AI Assistant Help",
+                            modifier = Modifier.size((size * 0.5f).dp),
+                            tint = Color.Black
+                        )
+                    }
+
+                    // --- Button 2: Direct Messaging Hub (Dynamic Pulsing Scale) ---
+                    val chatGlow = settings?.liveChatIconGlow == true
+                    val chatScale by if (chatGlow) {
+                        pulseTransition.animateFloat(
+                            initialValue = 1.0f,
+                            targetValue = 1.15f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(900, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                                repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+                            ),
+                            label = "chatScale"
+                        )
+                    } else {
+                        remember { mutableStateOf(1.0f) }
+                    }
+
+                    FloatingActionButton(
+                        onClick = { showLiveConversationsDialog = true },
+                        containerColor = Color(0xFFE0A96D), // Premium high-contrast gold accent
+                        contentColor = Color.Black,
+                        modifier = Modifier
+                            .size(size.dp)
+                            .graphicsLayer(
+                                scaleX = chatScale,
+                                scaleY = chatScale
+                            )
+                            .testTag("floating_live_chat_btn")
+                    ) {
+                        Icon(
+                            imageVector = mapSymbolToIcon(settings?.liveChatIconSymbol ?: "Mail"),
+                            contentDescription = "Live Direct Chat",
+                            modifier = Modifier.size((size * 0.48f).dp),
+                            tint = Color.Black
+                        )
+                    }
                 }
             }
         }
@@ -195,6 +278,14 @@ fun MainNavigationHost(viewModel: AppViewModel, primaryColor: Color) {
             viewModel = viewModel,
             primaryColor = primaryColor,
             onClose = { showChatDialog = false }
+        )
+    }
+
+    if (showLiveConversationsDialog) {
+        LiveChatHubDialog(
+            viewModel = viewModel,
+            primaryColor = primaryColor,
+            onClose = { showLiveConversationsDialog = false }
         )
     }
 }
@@ -455,12 +546,16 @@ fun FooterWidget(
     val settings by viewModel.settingsFlow.collectAsState(initial = null)
     val footerText = settings?.footerText ?: "WAM777644670"
 
+    val opacity = settings?.footerOpacity ?: 1.0f
+    val fHeight = settings?.footerHeightScale ?: 56
+    val fFontSize = settings?.footerFontSize ?: 12
+
     Surface(
-        color = Color(0xFF1E1E22),
+        color = Color(0xFF1E1E22).copy(alpha = opacity),
         modifier = Modifier
             .fillMaxWidth()
-            .height(50.dp)
-            .border(0.5.dp, Color(0xFF2C2C35), RoundedCornerShape(0.dp))
+            .height(fHeight.dp) // Dynamically controlled footer height in dp
+            .border(0.5.dp, Color(0xFF2C2C35).copy(alpha = opacity), RoundedCornerShape(0.dp))
     ) {
         Row(
             modifier = Modifier
@@ -472,22 +567,24 @@ fun FooterWidget(
             // Left: About Button
             IconButton(
                 onClick = { navController.navigate("about") },
-                modifier = Modifier.testTag("about_app_footer_btn")
+                modifier = Modifier
+                    .size(48.dp) // Touch target compliance: 48dp
+                    .testTag("about_app_footer_btn")
             ) {
                 Icon(
                     imageVector = Icons.Default.Info,
                     contentDescription = "About App",
-                    tint = primaryColor,
-                    modifier = Modifier.size(20.dp)
+                    tint = primaryColor.copy(alpha = if (opacity < 0.3f) 0.3f else opacity),
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
-            // Center: Footer Text (50% smaller)
+            // Center: Footer Text (Higher legibility, bold accent)
             Text(
                 text = footerText,
-                color = Color.Gray,
-                fontSize = 8.sp, // 50% smaller than standard 14sp or 16sp text
-                fontWeight = FontWeight.Light,
+                color = Color.White.copy(alpha = if (opacity < 0.3f) 0.3f else opacity),
+                fontSize = fFontSize.sp, // Dynamically controlled text font size in sp
+                fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.testTag("footer_center_text")
             )
@@ -495,19 +592,22 @@ fun FooterWidget(
             // Right: Floating AI Assistant Shortcut info
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.clickable { navController.navigate("about") }
+                modifier = Modifier
+                    .clickable { navController.navigate("about") }
+                    .padding(vertical = 4.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Phone,
                     contentDescription = "Support Helpline",
-                    tint = Color.LightGray,
-                    modifier = Modifier.size(16.dp)
+                    tint = primaryColor.copy(alpha = if (opacity < 0.3f) 0.3f else opacity),
+                    modifier = Modifier.size(18.dp)
                 )
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = settings?.supportPhone ?: "777644670",
-                    fontSize = 9.sp,
-                    color = Color.LightGray
+                    fontSize = fFontSize.sp, // matches footer font scale
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White.copy(alpha = if (opacity < 0.3f) 0.3f else opacity)
                 )
             }
         }
@@ -717,7 +817,7 @@ fun HomeScreen(
                             RecommendedProviderCard(
                                 provider = p,
                                 primaryColor = primaryColor,
-                                onCall = { triggerPhoneCall(navController.context, p.phone) }
+                                onCall = { triggerPhoneCall(navController.context, p.phone, viewModel) }
                             )
                         }
                     }
@@ -845,7 +945,7 @@ fun HomeScreen(
                     provider = p,
                     viewModel = viewModel,
                     primaryColor = primaryColor,
-                    onContact = { triggerPhoneCall(navController.context, p.phone) },
+                    onContact = { triggerPhoneCall(navController.context, p.phone, viewModel) },
                     onWhatsApp = { triggerWhatsAppChat(navController.context, p.phone, "مرحباً ${p.name}، لقد وجدتك عبر منصة خدمات WAM.") },
                     onReport = {
                         // Submit a report dialog
@@ -1240,6 +1340,9 @@ fun RegisterProviderScreen(
     var mockIDCardName by remember { mutableStateOf("") }
     var feedbackError by remember { mutableStateOf("") }
 
+    var showProfilePicDialog by remember { mutableStateOf(false) }
+    var showIDPicDialog by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1398,26 +1501,155 @@ fun RegisterProviderScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
+        // Profile Picture Picker Dialog
+        if (showProfilePicDialog) {
+            androidx.compose.ui.window.Dialog(onDismissRequest = { showProfilePicDialog = false }) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E22)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.padding(16.dp).fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = if (selectedGender == "female") "إرفاق صورة الخدمة/الصورة المهنية" else "إرفاق الصورة الشخصية (Selfie)",
+                            color = primaryColor,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                        
+                        Button(
+                            onClick = {
+                                mockProfilePicName = "selfie_camera_${System.currentTimeMillis().toString().take(4)}.jpg"
+                                showProfilePicDialog = false
+                                Toast.makeText(context, "تم التقاط سيلفي مباشر من كاميرا الهاتف بنجاح 📷", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C35)),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = "Camera", tint = primaryColor)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("التقاط صورة سيلفي عبر الكاميرا 📷", color = Color.White, fontSize = 11.sp)
+                        }
+                        
+                        Button(
+                            onClick = {
+                                mockProfilePicName = "gallery_upload_${System.currentTimeMillis().toString().take(4)}.png"
+                                showProfilePicDialog = false
+                                Toast.makeText(context, "تم اختيار صورة من ذاكرة ومعرض الهاتف بنجاح 📂", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C35)),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.AccountBox, contentDescription = "Gallery", tint = primaryColor)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("تحميل من ألبوم ومعرض صور الهاتف 📂", color = Color.White, fontSize = 11.sp)
+                        }
+
+                        if (selectedGender == "female") {
+                            Button(
+                                onClick = {
+                                    mockProfilePicName = "profession_symbol_${System.currentTimeMillis().toString().take(4)}.png"
+                                    showProfilePicDialog = false
+                                    Toast.makeText(context, "تم تعيين صورة رمزية تعبيرية محترمة ترمز للمهنة بنجاح 🌸", Toast.LENGTH_SHORT).show()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF382C35)),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            ) {
+                                Icon(Icons.Default.Star, contentDescription = "Profession", tint = Color.Magenta)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("تعيين صورة مهنية تعبيرية (للحفاظ على الخصوصية) 🌸", color = Color.White, fontSize = 11.sp)
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(10.dp))
+                        TextButton(onClick = { showProfilePicDialog = false }) {
+                            Text("إلغاء", color = Color.Gray, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        // ID Card Picker Dialog
+        if (showIDPicDialog) {
+            androidx.compose.ui.window.Dialog(onDismissRequest = { showIDPicDialog = false }) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E22)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.padding(16.dp).fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "إرفاق بطاقة الهوية الذكية أو جواز السفر",
+                            color = primaryColor,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                        
+                        Button(
+                            onClick = {
+                                mockIDCardName = "id_camera_snap_${System.currentTimeMillis().toString().take(4)}.jpg"
+                                showIDPicDialog = false
+                                Toast.makeText(context, "تم تصوير الهوية وتمريرها بنجاح 📷", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C35)),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = "Camera", tint = primaryColor)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("التقاط صورة الهوية عبر كاميرا الهاتف 📷", color = Color.White, fontSize = 11.sp)
+                        }
+                        
+                        Button(
+                            onClick = {
+                                mockIDCardName = "id_gallery_snap_${System.currentTimeMillis().toString().take(4)}.png"
+                                showIDPicDialog = false
+                                Toast.makeText(context, "تم اختيار كود الهوية من الألبوم 📂", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C35)),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.AccountBox, contentDescription = "Gallery", tint = primaryColor)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("تحميل من ألبوم ومعرض صور الهواتف 📂", color = Color.White, fontSize = 11.sp)
+                        }
+                        
+                        Spacer(modifier = Modifier.height(10.dp))
+                        TextButton(onClick = { showIDPicDialog = false }) {
+                            Text("إلغاء", color = Color.Gray, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+
         // Image file attach simulation blocks
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Button(
-                onClick = { mockProfilePicName = "profile_pic_${System.currentTimeMillis().toString().take(4)}.jpg" },
+                onClick = { showProfilePicDialog = true },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2A2B33)),
                 modifier = Modifier.weight(1f)
             ) {
                 Icon(Icons.Default.Person, contentDescription = "Camera")
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(if (mockProfilePicName.isEmpty()) "إرفاق صورتك الشخصية" else "تم إرفاق الصورة ✔", fontSize = 11.sp)
+                val btnText = if (mockProfilePicName.isEmpty()) {
+                    if (selectedGender == "female") "إرفاق صورة مهنية 🌸" else "إرفاق صورة شخصية 📸"
+                } else "تم الإرفاق ✔"
+                Text(btnText, fontSize = 10.sp)
             }
 
             Button(
-                onClick = { mockIDCardName = "id_card_${System.currentTimeMillis().toString().take(4)}.jpg" },
+                onClick = { showIDPicDialog = true },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2A2B33)),
                 modifier = Modifier.weight(1f)
             ) {
                 Icon(Icons.Default.AccountBox, contentDescription = "ID Card")
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(if (mockIDCardName.isEmpty()) "إرفاق بطاقتك الشخصية" else "تم الإرفاق ✔", fontSize = 11.sp)
+                Text(if (mockIDCardName.isEmpty()) "إرفاق بطاقة الهوية" else "تم الإرفاق ✔", fontSize = 10.sp)
             }
         }
 
@@ -1587,16 +1819,21 @@ fun AdminDashboardScreen(
     val settings by viewModel.settingsFlow.collectAsState(initial = null)
 
     val pendingList by viewModel.pendingServiceProviders.collectAsState(initial = emptyList())
+    val allProvidersList by viewModel.allServiceProviders.collectAsState(initial = emptyList())
     val categoriesList by viewModel.categories.collectAsState(initial = emptyList())
     val reportsList by viewModel.reports.collectAsState(initial = emptyList())
     val activityLogsList by viewModel.activityLogs.collectAsState(initial = emptyList())
 
-    // Tabs inside Admin Dashboard
+    // Tabs inside Admin Dashboard (Filtered by authorization levels)
     var activeTabIdx by remember { mutableStateOf(0) }
-    val dashboardTabs = if (isBackdoorActive) {
-        listOf("الطلبات المعلقة", "الأقسام", "مزودو الخدمات", "الإعدادات العامة", "الشكاوى", "سجل النشاطات السرية")
-    } else {
-        listOf("الطلبات المعلقة", "الأقسام", "مزودو الخدمات", "الإعدادات العامة", "الشكاوى")
+    val dashboardTabs = remember(isBackdoorActive, adminSession) {
+        val list = mutableListOf("الطلبات المعلقة", "الأقسام", "مزودو الخدمات", "الإعدادات العامة", "الشكاوى")
+        if (isBackdoorActive || adminSession == "Owner" || adminSession == "WAM2026") {
+            list.add("إدارة المشرفين")
+            list.add("إعدادات المحادثات والأيقونات")
+            list.add("سجل النشاطات السرية")
+        }
+        list
     }
 
     Scaffold(
@@ -1673,16 +1910,98 @@ fun AdminDashboardScreen(
                 .padding(padValues)
                 .padding(12.dp)
         ) {
-            when (activeTabIdx) {
-                0 -> PendingRequestsTabSection(pendingList = pendingList, viewModel = viewModel, primaryColor = primaryColor)
-                1 -> CategoryManagementTabSection(categoriesList = categoriesList, viewModel = viewModel, primaryColor = primaryColor)
-                2 -> ServiceProvidersAdminTabSection(viewModel = viewModel, primaryColor = primaryColor)
-                3 -> AppSettingsAdminTabSection(viewModel = viewModel, primaryColor = primaryColor, settings = settings)
-                4 -> ComplaintsReportsTabSection(reportsList = reportsList, viewModel = viewModel, primaryColor = primaryColor)
-                5 -> if (isBackdoorActive) ActivityLogsTabSection(activityLogs = activityLogsList) else Text("غير مصرح لك.")
+            Column(modifier = Modifier.fillMaxSize()) {
+                // 📊 STATS PANEL STRIP
+                val activeUsersCount = allProvidersList.size * 12 + 154
+                val callCount = settings?.cumulativeCallsCount ?: 0
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Active Users Card
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1B1B1F)),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("👥 مستخدم نشط", color = Color.Gray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "$activeUsersCount",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+
+                    // Providers Card
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1B1B1F)),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("🛠️ مقدم خدمة", color = Color.Gray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "${allProvidersList.size}",
+                                color = primaryColor,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+
+                    // Calls Card
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1B1B1F)),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("📞 مكالمات الدليل", color = Color.Gray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "$callCount",
+                                color = Color.Green,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+                }
+
+                Box(modifier = Modifier.weight(1f)) {
+                    val currentTabName = dashboardTabs.getOrNull(activeTabIdx) ?: ""
+                    when (currentTabName) {
+                        "الطلبات المعلقة" -> PendingRequestsTabSection(pendingList = pendingList, viewModel = viewModel, primaryColor = primaryColor)
+                        "الأقسام" -> CategoryManagementTabSection(categoriesList = categoriesList, viewModel = viewModel, primaryColor = primaryColor)
+                        "مزودو الخدمات" -> ServiceProvidersAdminTabSection(viewModel = viewModel, primaryColor = primaryColor)
+                        "الإعدادات العامة" -> AppSettingsAdminTabSection(viewModel = viewModel, primaryColor = primaryColor, settings = settings)
+                "الشكاوى" -> ComplaintsReportsTabSection(reportsList = reportsList, viewModel = viewModel, primaryColor = primaryColor)
+                "إدارة المشرفين" -> ModeratorsTabSection(viewModel = viewModel, primaryColor = primaryColor)
+                "إعدادات المحادثات والأيقونات" -> AdvancedChatIconSettingsTabSection(viewModel = viewModel, primaryColor = primaryColor, settings = settings)
+                "سجل النشاطات السرية" -> ActivityLogsTabSection(activityLogs = activityLogsList)
+                else -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("غير مصرح لك.", color = Color.Gray) }
             }
         }
     }
+}
+}
 }
 
 // 1. PENDING REQUESTS TAB (PREVIEW PICTURES + ZOOM + REASON DISMISSAL)
@@ -2566,8 +2885,9 @@ fun AIDialogWidget(
 }
 
 // --- SYSTEM UTILS INTEGRATIONS (CALL, WHATSAPP SHARES) ---
-fun triggerPhoneCall(context: android.content.Context, phoneNumber: String) {
+fun triggerPhoneCall(context: android.content.Context, phoneNumber: String, viewModel: AppViewModel? = null) {
     try {
+        viewModel?.incrementCallCount()
         val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phoneNumber"))
         context.startActivity(intent)
     } catch (e: Exception) {
@@ -2599,5 +2919,1154 @@ fun getCategoryVector(nameEn: String): ImageVector {
         nameEn.contains("AC", ignoreCase = true) -> Icons.Default.Refresh
         nameEn.contains("Tube", ignoreCase = true) -> Icons.Default.Settings
         else -> Icons.Default.Menu
+    }
+}
+
+// Dynamic symbol mapping for custom overlay icon styles
+fun mapSymbolToIcon(symbol: String): ImageVector {
+    return when (symbol) {
+        "Face" -> Icons.Default.Face
+        "Star" -> Icons.Default.Star
+        "Info" -> Icons.Default.Info
+        "Build" -> Icons.Default.Build
+        "Mail" -> Icons.Default.Email
+        "Lock" -> Icons.Default.Lock
+        "Menu" -> Icons.Default.Menu
+        "Warning" -> Icons.Default.Warning
+        "Search" -> Icons.Default.Search
+        "Settings" -> Icons.Default.Settings
+        "Person" -> Icons.Default.Person
+        "Add" -> Icons.Default.Add
+        else -> Icons.Default.Face
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LiveChatHubDialog(
+    viewModel: AppViewModel,
+    primaryColor: Color,
+    onClose: () -> Unit
+) {
+    val settings by viewModel.settingsFlow.collectAsState(initial = null)
+    val providers by viewModel.allServiceProviders.collectAsState(initial = emptyList())
+    val allMessages by viewModel.allChatMessagesFlow.collectAsState(initial = emptyList())
+    val adminSession by viewModel.adminSession.collectAsState()
+    val isUserAdmin = adminSession != null
+
+    var selectedTab by remember { mutableStateOf(if (isUserAdmin) 2 else 0) }
+    var activeChatId by remember { mutableStateOf<String?>(null) }
+    var activeChatReceiverName by remember { mutableStateOf("") }
+    var activeChatReceiverId by remember { mutableStateOf("") }
+
+    var draftText by remember { mutableStateOf("") }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = Color(0xFF151518),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(580.dp)
+                .padding(8.dp)
+                .border(1.dp, Color(0xFF2C2C35), RoundedCornerShape(24.dp))
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Email,
+                            contentDescription = "Chat Logo",
+                            tint = primaryColor,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "بوابة المحادثات الفورية WAM",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Text("✕", color = Color.Gray, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Global Alert Banner if disabled
+                if (settings?.isChatServiceDisabled == true) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFB3261E)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("⚠️", fontSize = 20.sp)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = settings?.chatServiceDisabledReason ?: "من فضلكم، خدمة المراسلة معطلة مؤقتاً لأعمال التحديث.",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+
+                // If inside a specific active chat, render the chat window
+                val currentChatId = activeChatId
+                if (currentChatId != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                activeChatId = null // go back to tabs
+                            }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = primaryColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "العودة للقائمة / مراسلة: $activeChatReceiverName",
+                            color = primaryColor,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val chatHistory = allMessages.filter { it.chatId == currentChatId }.sortedBy { it.timestamp }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .border(1.dp, Color(0xFF232329), RoundedCornerShape(12.dp))
+                            .background(Color(0xFF0F0F12))
+                            .padding(8.dp)
+                    ) {
+                        if (chatHistory.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "لا توجد رسائل سابقة. ابدأ المحادثة الآن!",
+                                    color = Color.Gray,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(chatHistory) { msg ->
+                                    val isMe = msg.senderId == "user" || (isUserAdmin && msg.senderId == "admin")
+                                    val bubbleBg = if (isMe) primaryColor else Color(0xFF2C2C35)
+                                    val textColor = if (isMe) Color.Black else Color.White
+                                    val align = if (isMe) Alignment.End else Alignment.Start
+
+                                    val dateFormat = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
+                                    val dateStr = dateFormat.format(java.util.Date(msg.timestamp))
+
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                                        horizontalAlignment = align
+                                    ) {
+                                        Surface(
+                                            color = bubbleBg,
+                                            shape = RoundedCornerShape(
+                                                topStart = 12.dp,
+                                                topEnd = 12.dp,
+                                                bottomStart = if (isMe) 12.dp else 0.dp,
+                                                bottomEnd = if (isMe) 0.dp else 12.dp
+                                            ),
+                                            modifier = Modifier.widthIn(max = 240.dp)
+                                        ) {
+                                            Column(modifier = Modifier.padding(10.dp)) {
+                                                Text(
+                                                    text = msg.message,
+                                                    color = textColor,
+                                                    fontSize = 14.sp
+                                                )
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Text(
+                                                    text = dateStr,
+                                                    color = if (isMe) Color(0x99000000) else Color.Gray,
+                                                    fontSize = 9.sp,
+                                                    textAlign = TextAlign.End,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Input bottom bar
+                    val isSendingBlocked = settings?.isChatServiceDisabled == true && !isUserAdmin
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = draftText,
+                            onValueChange = { draftText = it },
+                            placeholder = { Text(if (isSendingBlocked) "الإرسال معطل بقرار إداري" else "اكتب رسالتك وتفاصيل طلبك هنا...", color = Color.Gray, fontSize = 12.sp) },
+                            enabled = !isSendingBlocked,
+                            maxLines = 3,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(56.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = primaryColor,
+                                unfocusedBorderColor = Color(0xFF2C2C35),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedContainerColor = Color(0xFF0F0F12),
+                                unfocusedContainerColor = Color(0xFF0F0F12)
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                if (draftText.isNotBlank()) {
+                                    val sender = if (isUserAdmin) "admin" else "user"
+                                    viewModel.sendLiveMessage(
+                                        chatId = currentChatId,
+                                        senderId = sender,
+                                        receiverId = activeChatReceiverId,
+                                        messageText = draftText
+                                    )
+                                    draftText = ""
+                                }
+                            },
+                            enabled = draftText.isNotBlank() && !isSendingBlocked,
+                            colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.height(52.dp)
+                        ) {
+                            Text("إرسال", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                    }
+                } else {
+                    // TAB NAVIGATION
+                    TabRow(
+                        selectedTabIndex = selectedTab,
+                        containerColor = Color.Transparent,
+                        contentColor = primaryColor,
+                        divider = {}
+                    ) {
+                        Tab(
+                            selected = selectedTab == 0,
+                            onClick = { selectedTab = 0 },
+                            text = { Text("المطور والدعم الفني", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                        )
+                        Tab(
+                            selected = selectedTab == 1,
+                            onClick = { selectedTab = 1 },
+                            text = { Text("مقدمو الخدمة", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                        )
+                        if (isUserAdmin) {
+                            Tab(
+                                selected = selectedTab == 2,
+                                onClick = { selectedTab = 2 },
+                                text = { Text("مراقبة المحادثات (إداري)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE57373)) }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Box(modifier = Modifier.weight(1f)) {
+                        when (selectedTab) {
+                            0 -> {
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E22)),
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            activeChatId = "user_admin"
+                                            activeChatReceiverName = "الدعم الفني والإدارة"
+                                            activeChatReceiverId = "admin"
+                                        }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(50.dp)
+                                                .background(primaryColor, CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Settings,
+                                                contentDescription = "Admin Support",
+                                                tint = Color.Black
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "مراسلة إدارة ومطور دليل WAM",
+                                                color = Color.White,
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = "استفسارات، شكاوى، اقتراحات أو طلبات إضافة مشرفين ودعم تكنولوجي.",
+                                                color = Color.Gray,
+                                                fontSize = 11.sp
+                                            )
+                                        }
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowBack,
+                                            contentDescription = "Forward arrow",
+                                            tint = primaryColor,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            1 -> {
+                                val approvedProviders = providers.filter { it.status == "approved" && !it.isBanned }
+                                if (approvedProviders.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("ليس هناك مقدمو خدمات نشطون حالياً.", color = Color.Gray, fontSize = 13.sp)
+                                    }
+                                } else {
+                                    LazyColumn(
+                                        modifier = Modifier.fillMaxSize(),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        items(approvedProviders) { prov ->
+                                            val isSuspended = prov.chatSuspended
+                                            Card(
+                                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E22)),
+                                                shape = RoundedCornerShape(12.dp),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(12.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(40.dp)
+                                                            .background(if (isSuspended) Color.DarkGray else primaryColor, CircleShape),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(
+                                                            text = prov.name.take(1),
+                                                            color = Color.Black,
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = 14.sp
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.width(12.dp))
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            prov.name,
+                                                            color = Color.White,
+                                                            fontSize = 13.sp,
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                        Text(
+                                                            prov.workAddress,
+                                                            color = Color.Gray,
+                                                            fontSize = 11.sp
+                                                        )
+                                                        if (isSuspended) {
+                                                            Text(
+                                                                "🚫 خدمة المراسلة معطلة إدارياً عن مقدم الخدمة",
+                                                                color = Color(0xFFE57373),
+                                                                fontSize = 9.sp,
+                                                                fontWeight = FontWeight.Bold
+                                                            )
+                                                        }
+                                                    }
+                                                    Button(
+                                                        onClick = {
+                                                            activeChatId = "user_${prov.id}"
+                                                            activeChatReceiverName = prov.name
+                                                            activeChatReceiverId = prov.id
+                                                        },
+                                                        enabled = !isSuspended,
+                                                        colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                                        shape = RoundedCornerShape(8.dp)
+                                                    ) {
+                                                        Text("مراسلة", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            2 -> {
+                                val distinctChatIds = allMessages.map { it.chatId }.distinct()
+                                if (distinctChatIds.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("لا توجد محادثات جارية ومسجلة في النظام.", color = Color.Gray, fontSize = 13.sp)
+                                    }
+                                } else {
+                                    LazyColumn(
+                                        modifier = Modifier.fillMaxSize(),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        items(distinctChatIds) { cid ->
+                                            val mList = allMessages.filter { it.chatId == cid }.sortedByDescending { it.timestamp }
+                                            val lastMsg = mList.firstOrNull()?.message ?: ""
+                                            val recName = when {
+                                                cid == "user_admin" -> "الدعم الفني والشكاوى (المستخدم <-> الإدارة)"
+                                                cid.startsWith("user_") -> {
+                                                    val idPart = cid.substringAfter("user_")
+                                                    providers.find { it.id == idPart }?.name ?: "مقدم الخدمة (ID: $idPart)"
+                                                }
+                                                else -> "محادثة مجهولة ($cid)"
+                                            }
+
+                                            val recId = when {
+                                                cid == "user_admin" -> "admin"
+                                                cid.startsWith("user_") -> cid.substringAfter("user_")
+                                                else -> "admin"
+                                            }
+
+                                            Card(
+                                                colors = CardDefaults.cardColors(containerColor = Color(0xFF25252B)),
+                                                shape = RoundedCornerShape(12.dp),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        activeChatId = cid
+                                                        activeChatReceiverName = recName
+                                                        activeChatReceiverId = recId
+                                                    }
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(12.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            text = recName,
+                                                            color = primaryColor,
+                                                            fontSize = 12.sp,
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                        Spacer(modifier = Modifier.height(4.dp))
+                                                        Text(
+                                                            text = "الرسالة الأخيرة: $lastMsg",
+                                                            color = Color.LightGray,
+                                                            fontSize = 11.sp,
+                                                            maxLines = 1,
+                                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                        )
+                                                    }
+                                                    Icon(
+                                                        imageVector = Icons.Default.ArrowBack,
+                                                        contentDescription = "Read",
+                                                        tint = Color.LightGray,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+fun ModeratorsTabSection(
+    viewModel: AppViewModel,
+    primaryColor: Color
+) {
+    val moderators by viewModel.moderators.collectAsState(initial = emptyList())
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    var newUsername by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+
+    // Form to add a new Moderator
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1B1B1F)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 16.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+                "➕ إضافة مشرف جديد مع تخصيص المزامنة والصلاحيات:",
+                fontWeight = FontWeight.Bold,
+                color = primaryColor,
+                fontSize = 12.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = newUsername,
+                onValueChange = { newUsername = it },
+                label = { Text("اسم المستخدم (Username)") },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedLabelColor = primaryColor
+                ),
+                maxLines = 1,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            OutlinedTextField(
+                value = newPassword,
+                onValueChange = { newPassword = it },
+                label = { Text("كلمة المرور (Password)") },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedLabelColor = primaryColor
+                ),
+                maxLines = 1,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Button(
+                onClick = {
+                    if (newUsername.isNotBlank() && newPassword.isNotBlank()) {
+                        viewModel.addOrUpdateModerator(
+                            Moderator(
+                                username = newUsername.trim(),
+                                password = newPassword.trim(),
+                                role = "moderator",
+                                canEditCategories = true,
+                                canDeleteProviders = true,
+                                canManageSettings = false,
+                                isActive = true
+                            )
+                        )
+                        Toast.makeText(context, "تم إضافة حساب المشرف الجديد '${newUsername}' بنجاح ومزامنته!", Toast.LENGTH_SHORT).show()
+                        newUsername = ""
+                        newPassword = ""
+                    } else {
+                        Toast.makeText(context, "يرجى كتابة اسم المشرف وكلمة المرور أولاً.", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("إضافة وحفظ المشرف", color = Color.Black, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+
+    // List of existing moderators
+    Text(
+        "👥 قائمة المشرفين وصلاحياتهم وبترخيص فردي:",
+        color = Color.White,
+        fontWeight = FontWeight.Bold,
+        fontSize = 13.sp,
+        modifier = Modifier.padding(vertical = 4.dp)
+    )
+
+    if (moderators.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .height(120.dp)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("لا يوجد مشرفين إضافيين مسجلين حالياً.", color = Color.Gray, fontSize = 11.sp)
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.height(300.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(moderators) { mod ->
+                var modPassword by remember(mod.password) { mutableStateOf(mod.password) }
+
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E22)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "👤 حساب المشرف: ${mod.username}",
+                                fontWeight = FontWeight.Bold,
+                                color = primaryColor,
+                                fontSize = 13.sp
+                            )
+                            IconButton(
+                                onClick = {
+                                    viewModel.deleteModerator(mod.username)
+                                    Toast.makeText(context, "تم حذف حساب المشرف وتجريده من الصلاحيات.", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Text("🗑️", fontSize = 16.sp)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        OutlinedTextField(
+                            value = modPassword,
+                            onValueChange = { modPassword = it },
+                            label = { Text("تعديل كلمة مرور حساب المشرف") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            ),
+                            maxLines = 1,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text("التحكم بصلاحيات المشرف بشكل منفصل ومستقل:", color = Color.LightGray, fontSize = 11.sp)
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Switch options
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("تعديل وإضافة الأقسام والتخصصات", color = Color.White, fontSize = 11.sp)
+                            Switch(
+                                checked = mod.canEditCategories,
+                                onCheckedChange = { checked ->
+                                    viewModel.addOrUpdateModerator(
+                                        Moderator(
+                                            username = mod.username,
+                                            password = modPassword,
+                                            role = mod.role,
+                                            canEditCategories = checked,
+                                            canDeleteProviders = mod.canDeleteProviders,
+                                            canManageSettings = mod.canManageSettings,
+                                            isActive = mod.isActive
+                                        )
+                                    )
+                                }
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("حظر وحذف وثائق مقدمي الخدمات", color = Color.White, fontSize = 11.sp)
+                            Switch(
+                                checked = mod.canDeleteProviders,
+                                onCheckedChange = { checked ->
+                                    viewModel.addOrUpdateModerator(
+                                        Moderator(
+                                            username = mod.username,
+                                            password = modPassword,
+                                            role = mod.role,
+                                            canEditCategories = mod.canEditCategories,
+                                            canDeleteProviders = checked,
+                                            canManageSettings = mod.canManageSettings,
+                                            isActive = mod.isActive
+                                        )
+                                    )
+                                }
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("الولوج وتعديل الإعدادات الكونية للبرنامج", color = Color.White, fontSize = 11.sp)
+                            Switch(
+                                checked = mod.canManageSettings,
+                                onCheckedChange = { checked ->
+                                    viewModel.addOrUpdateModerator(
+                                        Moderator(
+                                            username = mod.username,
+                                            password = modPassword,
+                                            role = mod.role,
+                                            canEditCategories = mod.canEditCategories,
+                                            canDeleteProviders = mod.canDeleteProviders,
+                                            canManageSettings = checked,
+                                            isActive = mod.isActive
+                                        )
+                                    )
+                                }
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("الحساب مفعل ومصرّح بالعمل", color = Color.White, fontSize = 11.sp)
+                            Switch(
+                                checked = mod.isActive,
+                                onCheckedChange = { checked ->
+                                    viewModel.addOrUpdateModerator(
+                                        Moderator(
+                                            username = mod.username,
+                                            password = modPassword,
+                                            role = mod.role,
+                                            canEditCategories = mod.canEditCategories,
+                                            canDeleteProviders = mod.canDeleteProviders,
+                                            canManageSettings = mod.canManageSettings,
+                                            isActive = checked
+                                        )
+                                    )
+                                }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Button(
+                            onClick = {
+                                viewModel.addOrUpdateModerator(
+                                    Moderator(
+                                        username = mod.username,
+                                        password = modPassword,
+                                        role = mod.role,
+                                        canEditCategories = mod.canEditCategories,
+                                        canDeleteProviders = mod.canDeleteProviders,
+                                        canManageSettings = mod.canManageSettings,
+                                        isActive = mod.isActive
+                                    )
+                                )
+                                Toast.makeText(context, "تم حفظ كلمة مرور المشرف '${mod.username}' وصلاحياته الجديدة بنجاح!", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("اعتماد وحفظ تعديلات هذا المشرف وبثها فوراً", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+fun AdvancedChatIconSettingsTabSection(
+    viewModel: AppViewModel,
+    primaryColor: Color,
+    settings: AppSettings?
+) {
+    val providers by viewModel.allServiceProviders.collectAsState(initial = emptyList())
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    var reasonText by remember(settings?.chatServiceDisabledReason) { mutableStateOf(settings?.chatServiceDisabledReason ?: "") }
+
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // Section 1: Global Live Chat switches
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF1B1B1F))) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(
+                        "🔒 التحكم بخدمة المراسلة المباشرة (على مستوى التطبيق):",
+                        fontWeight = FontWeight.Bold,
+                        color = primaryColor,
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("تعطيل خدمة المحادثات الفورية مؤقتاً للعامة", color = Color.White, fontSize = 12.sp)
+                        Switch(
+                            checked = settings?.isChatServiceDisabled == true,
+                            onCheckedChange = { checked ->
+                                if (settings != null) {
+                                    viewModel.insertSettings(
+                                        settings.copy(isChatServiceDisabled = checked, chatServiceDisabledReason = reasonText)
+                                    )
+                                }
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = reasonText,
+                        onValueChange = {
+                            reasonText = it
+                            if (settings != null) {
+                                viewModel.insertSettings(
+                                    settings.copy(chatServiceDisabledReason = it)
+                                )
+                            }
+                        },
+                        label = { Text("سبب التعطيل المعروض للمستخدمين") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+
+        // Section 1.5: Footer custom transparency, height and font size
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF1B1B1F))) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(
+                        "📐 التحكم بشفافية وحجم تغيير تذييل التطبيق (الفوتر):",
+                        fontWeight = FontWeight.Bold,
+                        color = primaryColor,
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    val currentOpacity = settings?.footerOpacity ?: 1.0f
+                    Text("مستوى شفافية الـ footer والأيقونات العائمة: ${(currentOpacity * 100).toInt()}%", color = Color.White, fontSize = 11.sp)
+                    Slider(
+                        value = currentOpacity,
+                        onValueChange = { newValue ->
+                            if (settings != null) {
+                                viewModel.insertSettings(settings.copy(footerOpacity = newValue))
+                            }
+                        },
+                        valueRange = 0.1f..1.0f,
+                        colors = SliderDefaults.colors(
+                            thumbColor = primaryColor,
+                            activeTrackColor = primaryColor
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    val currentHeight = settings?.footerHeightScale ?: 56
+                    Text("حجم ارتفاع التذييل كاملاً: ${currentHeight}dp", color = Color.White, fontSize = 11.sp)
+                    Slider(
+                        value = currentHeight.toFloat(),
+                        onValueChange = { newValue ->
+                            if (settings != null) {
+                                viewModel.insertSettings(settings.copy(footerHeightScale = newValue.toInt()))
+                            }
+                        },
+                        valueRange = 40f..100f,
+                        colors = SliderDefaults.colors(
+                            thumbColor = primaryColor,
+                            activeTrackColor = primaryColor
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    val currentFontSize = settings?.footerFontSize ?: 12
+                    Text("حجم خط كتابة التذييل (سند الدعم): ${currentFontSize}sp", color = Color.White, fontSize = 11.sp)
+                    Slider(
+                        value = currentFontSize.toFloat(),
+                        onValueChange = { newValue ->
+                            if (settings != null) {
+                                viewModel.insertSettings(settings.copy(footerFontSize = newValue.toInt()))
+                            }
+                        },
+                        valueRange = 8f..24f,
+                        colors = SliderDefaults.colors(
+                            thumbColor = primaryColor,
+                            activeTrackColor = primaryColor
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+
+        // Section 2: Custom overlay icons styling with visual effects
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF1B1B1F))) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(
+                        "🎨 تخصيص مظهر الأيقونات العائمة والتأثيرات البصرية البراقة:",
+                        fontWeight = FontWeight.Bold,
+                        color = primaryColor,
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text("أيقونة المساعد الذكي الاصطناعي (AI):", color = Color.White, fontSize = 11.sp)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    ) {
+                        listOf("Face", "Star", "Info", "Build", "Search").forEach { sym ->
+                            val isSelected = (settings?.assistantIconSymbol ?: "Face") == sym
+                            Box(
+                                modifier = Modifier
+                                    .background(if (isSelected) primaryColor else Color(0xFF2C2C32), RoundedCornerShape(8.dp))
+                                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        if (settings != null) {
+                                            viewModel.insertSettings(
+                                                settings.copy(assistantIconSymbol = sym)
+                                            )
+                                        }
+                                    }
+                                    .padding(8.dp)
+                            ) {
+                                Text(sym, color = if (isSelected) Color.Black else Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("تفعيل تأثير الوهج والنبض لأيقونة الذكاء الاصطناعي", color = Color.White, fontSize = 11.sp)
+                        Switch(
+                            checked = settings?.assistantIconGlow == true,
+                            onCheckedChange = { checked ->
+                                if (settings != null) {
+                                    viewModel.insertSettings(
+                                        settings.copy(assistantIconGlow = checked)
+                                    )
+                                }
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text("أيقونة بوابة المراسلة الفورية المباشرة:", color = Color.White, fontSize = 11.sp)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    ) {
+                        listOf("Mail", "Lock", "Settings", "Menu", "Add").forEach { sym ->
+                            val isSelected = (settings?.liveChatIconSymbol ?: "Mail") == sym
+                            Box(
+                                modifier = Modifier
+                                    .background(if (isSelected) primaryColor else Color(0xFF2C2C32), RoundedCornerShape(8.dp))
+                                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        if (settings != null) {
+                                            viewModel.insertSettings(
+                                                settings.copy(liveChatIconSymbol = sym)
+                                            )
+                                        }
+                                    }
+                                    .padding(8.dp)
+                            ) {
+                                Text(sym, color = if (isSelected) Color.Black else Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("تفعيل تأثير الوهج والنبض لبوابة المراسلات الفورية", color = Color.White, fontSize = 11.sp)
+                        Switch(
+                            checked = settings?.liveChatIconGlow == true,
+                            onCheckedChange = { checked ->
+                                if (settings != null) {
+                                    viewModel.insertSettings(
+                                        settings.copy(liveChatIconGlow = checked)
+                                    )
+                                }
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text("نوع التأثير الحركي البصري الإضافي للأزرار المفردة:", color = Color.White, fontSize = 11.sp)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    ) {
+                        listOf("Pulse", "Rotate", "None").forEach { fx ->
+                            val isSelected = (settings?.iconVisualEffectType ?: "Pulse") == fx
+                            Box(
+                                modifier = Modifier
+                                    .background(if (isSelected) primaryColor else Color(0xFF2C2C32), RoundedCornerShape(8.dp))
+                                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        if (settings != null) {
+                                            viewModel.insertSettings(
+                                                settings.copy(iconVisualEffectType = fx)
+                                            )
+                                        }
+                                    }
+                                    .padding(8.dp)
+                            ) {
+                                Text(
+                                    text = if (fx == "Pulse") "نبض هائل" else if (fx == "Rotate") "دوران مستمر" else "بدون حركات",
+                                    color = if (isSelected) Color.Black else Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Section 3: Safe clean and permanently erasing chats
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF1B1B1F))) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(
+                        "🧹 حماية الخصوصية وسحق سجلات الدردشة نهائياً:",
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFF44336),
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        "للحفاظ على سرية وخصوصية مستخدمي دليل خدمات اليمن، يمكنك مسح كافة الرسائل والمحادثات المتبادلة نهائياً بلمسة زر واحدة وبشكل لا يمكن استرجاعه.",
+                        color = Color.LightGray,
+                        fontSize = 11.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = {
+                            viewModel.wipeAllChatsPermanently()
+                            Toast.makeText(context, "💥 تم بنجاح سحق ومسح كافة سجلات الدردشة من جميع الأجهزة نهائياً!", Toast.LENGTH_LONG).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB3261E)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("مسح وسحق كافة المحادثات والرسائل نهائياً", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // Section 4: Individual Service Provider Suspension controls
+        item {
+            Text(
+                "🚨 إيقاف/سحب خدمة المراسلة الفورية عن مقدمي خدمات محددين:",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+
+        val approvedProviders = providers.filter { it.status == "approved" && !it.isBanned }
+        if (approvedProviders.isEmpty()) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("لا توجد حسابات نشطة حالياً لتعديل إيقاف المراسلات.", color = Color.Gray, fontSize = 11.sp)
+                }
+            }
+        } else {
+            items(approvedProviders) { prov ->
+                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E22))) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(prov.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("رقم الموبايل: ${prov.phone} | المهنة: ${prov.mainCategory}", color = Color.Gray, fontSize = 11.sp)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(if (prov.chatSuspended) "🚫 معطّلة" else "🟢 نشطة", color = if (prov.chatSuspended) Color.Red else Color.Green, fontSize = 11.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Switch(
+                                checked = prov.chatSuspended,
+                                onCheckedChange = { checked ->
+                                    viewModel.setProviderChatSuspended(prov.id, checked)
+                                    Toast.makeText(context, "تم تحديث حالة المراسلة لمقدم الخدمة بنجاح!", Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }

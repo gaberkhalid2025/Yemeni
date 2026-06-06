@@ -109,6 +109,9 @@ interface AppDao {
     @Query("DELETE FROM faq_items WHERE id = :id")
     suspend fun deleteFAQById(id: String)
 
+    @Query("UPDATE service_providers SET chatSuspended = :chatSuspended WHERE id = :id")
+    suspend fun updateProviderChatSuspended(id: String, chatSuspended: Boolean)
+
     // --- Application Settings ---
     @Query("SELECT * FROM app_settings WHERE id = 'global_settings'")
     fun getSettingsFlow(): Flow<AppSettings?>
@@ -118,4 +121,27 @@ interface AppDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSettings(settings: AppSettings)
+
+    // --- Moderator Accounts ---
+    @Query("SELECT * FROM moderators ORDER BY username ASC")
+    fun getAllModeratorsFlow(): Flow<List<Moderator>>
+
+    @Query("SELECT * FROM moderators")
+    suspend fun getAllModerators(): List<Moderator>
+
+    @Query("SELECT * FROM moderators WHERE username = :username")
+    suspend fun getModeratorByUsername(username: String): Moderator?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertModerator(moderator: Moderator)
+
+    @Query("DELETE FROM moderators WHERE username = :username")
+    suspend fun deleteModeratorByUsername(username: String)
+
+    // --- Global Chat Audits ---
+    @Query("SELECT * FROM chat_messages ORDER BY timestamp DESC")
+    fun getAllChatMessagesFlow(): Flow<List<ChatMessage>>
+
+    @Query("DELETE FROM chat_messages")
+    suspend fun deleteAllChatMessages()
 }
