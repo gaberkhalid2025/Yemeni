@@ -29,6 +29,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     
     // NEW REALTIME STATE STREAMS
     val moderators = repository.allModerators
+    private val _moderatorsList = MutableStateFlow<List<Moderator>>(emptyList())
+    val moderatorsList: StateFlow<List<Moderator>> = _moderatorsList.asStateFlow()
     val allChatMessagesFlow = repository.allChatMessages
 
     // --- Authentication & Backdoor Sessions ---
@@ -217,6 +219,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     init {
+        // Collect moderators in real-time to memory to avoid any blocking/network delays during authentication
+        viewModelScope.launch {
+            repository.allModerators.collect {
+                _moderatorsList.value = it
+            }
+        }
+
         // Preload database with rich Yemeni default configuration data asynchronously
         viewModelScope.launch {
             repository.seedInitialDataIfEmpty()
@@ -285,17 +294,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
         // 2. Check Database-Stored Moderators
         var success = false
-        runBlocking {
-            val mod = repository.getModeratorByUsername(username)
-            if (mod != null && mod.password == password && mod.isActive) {
-                _adminSession.value = username
-                if (rememberMe) {
-                    prefs.edit().putString("LOGGED_ADMIN", username).apply()
-                }
-                _isBackdoorActive.value = false
-                insertActivityLog(username, "Moderator Sign In", "Moderator $username successfully logged into dashboard")
-                success = true
+        val mod = _moderatorsList.value.find { it.username.equals(username, ignoreCase = true) }
+        if (mod != null && mod.password == password && mod.isActive) {
+            _adminSession.value = mod.username
+            if (rememberMe) {
+                prefs.edit().putString("LOGGED_ADMIN", mod.username).apply()
             }
+            _isBackdoorActive.value = false
+            viewModelScope.launch {
+                insertActivityLog(mod.username, "Moderator Sign In", "Moderator ${mod.username} successfully logged into dashboard")
+            }
+            success = true
         }
         return success
     }
@@ -656,9 +665,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (current == "Owner" || current == "WAM2026") {
             return Moderator(current, "", "owner", canEditCategories = true, canDeleteProviders = true, canManageSettings = true, isActive = true)
         }
-        return runBlocking {
-            repository.getModeratorByUsername(current) ?: Moderator(current, "", "moderator", canEditCategories = false, canDeleteProviders = false, canManageSettings = false, isActive = false)
-        }
+        val mod = _moderatorsList.value.find { it.username.equals(current, ignoreCase = true) }
+        return mod ?: Moderator(current, "", "moderator", canEditCategories = false, canDeleteProviders = false, canManageSettings = false, isActive = false)
     }
 
     // --- Moderator Mutations ---
