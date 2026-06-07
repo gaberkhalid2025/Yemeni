@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">Yemen Services</string>
-    <string name="google_api_key" translatable="false">AIzaSyA5ysT25HeS0qFz6rUy-YCSFcVqlPowoSc</string>
-    <string name="google_app_id" translatable="false">1:837151720505:android:68e1a6cab4369a2be979e8</string>
-    <string name="gcm_defaultSenderId" translatable="false">837151720505</string>
-    <string name="project_id" translatable="false">yemenimaw</string>
-    <string name="google_storage_bucket" translatable="false">yemenimaw.firebasestorage.app</string>
-</resources>
