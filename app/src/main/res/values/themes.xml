@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.MyApplication" parent="android:Theme.DeviceDefault.NoActionBar" />
+    <style name="Theme.YemenServices" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Customize base theme colors if needed but UI is rendered with Compose -->
+    </style>
 </resources>
