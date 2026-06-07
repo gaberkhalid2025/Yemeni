@@ -217,6 +217,7 @@ fun MainNavigationHost(viewModel: AppViewModel, primaryColor: Color) {
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController, viewModel: AppViewModel, primaryColor: Color) {
     val context = LocalContext.current

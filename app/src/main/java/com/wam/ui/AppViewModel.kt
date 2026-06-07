@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -53,6 +54,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // State Flows bound to Snapshot Listeners on Cloud Firestore
     val settings: StateFlow<AppSettings> = repository.settingsFlow
+        .map { it ?: AppSettings() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
 
     val categories: StateFlow<List<Category>> = repository.categoriesFlow
@@ -352,7 +354,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val contentsArray = org.json.JSONArray().apply {
                     val contentObj = JSONObject().apply {
                         val partsArray = org.json.JSONArray().apply {
-                            add(JSONObject().apply { put("text", promptText) })
+                            put(JSONObject().apply { put("text", promptText) })
                         }
                         put("parts", partsArray)
                     }
@@ -362,7 +364,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
                 val systemInstructionObj = JSONObject().apply {
                     val partsArray = org.json.JSONArray().apply {
-                        add(JSONObject().apply { put("text", systemInstr) })
+                        put(JSONObject().apply { put("text", systemInstr) })
                     }
                     put("parts", partsArray)
                 }
