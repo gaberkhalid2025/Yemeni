@@ -1,20 +1,21 @@
 {
   "project_info": {
-    "project_number": "954106721012",
-    "project_id": "serviseyem",
-    "storage_bucket": "serviseyem.firebasestorage.app"
+    "project_number": "837151720505",
+    "project_id": "yemenimaw",
+    "storage_bucket": "yemenimaw.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:954106721012:android:5fa5e385532b08d5c0e4a1",
+        "mobilesdk_app_id": "1:837151720505:android:68e1a6cab4369a2be979e8",
         "android_client_info": {
-          "package_name": "com.Serviseyem"
+          "package_name": "com.wam"
         }
       },
+      "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBq2SEhBADFGVF4sDyV3sC_t2HqQ1m8lC0"
+          "current_key": "AIzaSyA5ysT25HeS0qFz6rUy-YCSFcVqlPowoSc"
         }
       ],
       "services": {

@@ -370,7 +370,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun runGeminiAPIRequest(promptText: String): String = withContext(Dispatchers.IO) {
         // Fallback for empty API settings
-        val key = "AIzaSyBq2SEhBADFGVF4sDyV3sC_t2HqQ1m8lC0" // Explicit placeholder or client key from firebase options
+        val key = "AIzaSyA5ysT25HeS0qFz6rUy-YCSFcVqlPowoSc" // Explicit client key as requested from firebase options
         val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$key"
 
         val client = OkHttpClient.Builder()

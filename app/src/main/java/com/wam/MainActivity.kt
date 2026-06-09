@@ -48,6 +48,22 @@ import java.util.Date
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Manual programmatic initialization of Firebase to completely support Gradle 9 dynamic configurations
+        try {
+            if (FirebaseApp.getApps(this).isEmpty()) {
+                val options = com.google.firebase.FirebaseOptions.Builder()
+                    .setApplicationId("1:837151720505:android:68e1a6cab4369a2be979e8")
+                    .setApiKey("AIzaSyA5ysT25HeS0qFz6rUy-YCSFcVqlPowoSc")
+                    .setProjectId("yemenimaw")
+                    .setStorageBucket("yemenimaw.firebasestorage.app")
+                    .build()
+                FirebaseApp.initializeApp(this, options)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
         enableEdgeToEdge()
         setContent {
             MaterialTheme {
@@ -546,11 +562,10 @@ fun HomeScreen(
                         value = searchKeyword,
                         onValueChange = onSearchChange,
                         placeholder = { Text(if (dirRTL) "ابحث عن سباك، كهربائي، صنعاء..." else "Search name, location...", color = Color.Gray, fontSize = 13.sp) },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).defaultMinSize(minHeight = 48.dp),
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            textRowMinHeight = 40.dp
+                            unfocusedContainerColor = Color.Transparent
                         ),
                         singleLine = true,
                         trailingIcon = {

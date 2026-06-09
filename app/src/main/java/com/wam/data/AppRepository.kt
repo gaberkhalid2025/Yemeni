@@ -14,10 +14,10 @@ class AppRepository {
     private val db = Firebase.firestore
 
     init {
-        // Explicitly enable Offline Persistence
+        // Disabling Offline Persistence entirely to strictly avoid any local storage / Room cache
         try {
             val settings = FirebaseFirestoreSettings.Builder()
-                .setPersistenceEnabled(true)
+                .setPersistenceEnabled(false)
                 .build()
             db.firestoreSettings = settings
         } catch (e: Exception) {
